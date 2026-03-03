@@ -18,5 +18,5 @@ A smart system to analyze customer reviews using sentiment analysis and root cau
 ## Use Case
 Helps businesses quickly identify service problems and improve customer satisfaction.
 
-Deployed Frontend:https://review-ochre.vercel.app/
+Deployed Frontend: https://review-ochre.vercel.app/
 Deployed Backend: https://review-management-tb17.onrender.com
