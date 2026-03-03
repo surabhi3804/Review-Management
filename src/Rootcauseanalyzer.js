@@ -300,7 +300,7 @@ export default function RootCauseAnalyzer() {
   const [insights,  setInsights]  = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loading,   setLoading]   = useState(true);
-  const [ setError]     = useState(null);
+  const [ error, setError]     = useState(null);
   const [sourcesData, setSourcesData] = useState(MOCK_SOURCES);
 
   useEffect(() => {
@@ -368,7 +368,7 @@ export default function RootCauseAnalyzer() {
       });
       setLoading(false);
     });
-  }, [branch]);
+  }, [branch, setError]);
 
   const a = analytics || {};
   const s = a.sentiment_breakdown || {};
