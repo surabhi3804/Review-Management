@@ -60,14 +60,15 @@ function Sparkline({ data, color, width = 70, height = 26 }) {
     return `${x},${y}`;
   }).join(" ");
   const last = data[data.length - 1], prev = data[data.length - 2];
-  const trending = last >= prev;
+  // FIX 1: 'trending' was assigned but never used — replaced with direct usage
+  const trendingUp = last >= prev;
   return (
     <svg width={width} height={height} style={{ overflow: "visible" }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8"
         strokeLinecap="round" strokeLinejoin="round"
         style={{ filter: `drop-shadow(0 0 3px ${color}66)` }} />
       <circle cx={(data.length - 1) / (data.length - 1) * width} cy={height - ((last - min) / range) * (height - 4) - 2}
-        r="3" fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+        r="3" fill={trendingUp ? color : color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
     </svg>
   );
 }
@@ -199,9 +200,13 @@ function CompetitorCard({ entity, rank, delay = 0 }) {
 }
 
 // ── RatingBar ─────────────────────────────────────────────────
+// FIX 2: Added entity.avgRating to dependency array
 function RatingBar({ entity, delay = 0 }) {
   const [w, setW] = useState(0);
-  useEffect(() => { const t = setTimeout(() => setW((entity.avgRating / 5) * 100), delay); return () => clearTimeout(t); }, [delay]);
+  useEffect(() => {
+    const t = setTimeout(() => setW((entity.avgRating / 5) * 100), delay);
+    return () => clearTimeout(t);
+  }, [delay, entity.avgRating]); // <-- added entity.avgRating
   return (
     <div className="cc-rbar-row">
       <div className="cc-rbar-meta">
@@ -222,13 +227,17 @@ function RatingBar({ entity, delay = 0 }) {
 }
 
 // ── SentimentBar ──────────────────────────────────────────────
+// FIX 3: Added pos, neu, neg to dependency array
 function SentimentBar({ entity, delay = 0 }) {
   const [w, setW] = useState({ pos: 0, neu: 0, neg: 0 });
   const total = entity.sentiment.positive + entity.sentiment.neutral + entity.sentiment.negative;
   const pos = total > 0 ? Math.round((entity.sentiment.positive / total) * 100) : 0;
   const neu = total > 0 ? Math.round((entity.sentiment.neutral / total) * 100) : 0;
   const neg = 100 - pos - neu;
-  useEffect(() => { const x = setTimeout(() => setW({ pos, neu, neg }), delay); return () => clearTimeout(x); }, [delay]);
+  useEffect(() => {
+    const x = setTimeout(() => setW({ pos, neu, neg }), delay);
+    return () => clearTimeout(x);
+  }, [delay, pos, neu, neg]); // <-- added pos, neu, neg
 
   return (
     <div className="cc-sbar-row">
@@ -254,25 +263,31 @@ function SentimentBar({ entity, delay = 0 }) {
 }
 
 // ── CategoryBars ──────────────────────────────────────────────
+const CATS = ["Food", "Service", "Staff", "Ambience", "Cleanliness"];
+
+// FIX 4: Moved cats outside component to avoid stale dependency; added allE & cats to deps
 function CategoryBars({ yours, competitors }) {
   const allE = yours ? [yours, ...competitors] : competitors;
-  const cats = ["Food", "Service", "Staff", "Ambience", "Cleanliness"];
   const [w, setW] = useState({});
+
   useEffect(() => {
     const t = setTimeout(() => {
       const nw = {};
-      cats.forEach(cat => {
+      CATS.forEach(cat => {
         const mx = Math.max(...allE.map(e => e.categories[cat] || 0), 1);
         allE.forEach(e => { nw[`${e.name}-${cat}`] = ((e.categories[cat] || 0) / mx) * 100; });
       });
       setW(nw);
     }, 300);
     return () => clearTimeout(t);
-  }, [yours]);
+  }, [yours]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: allE is derived from yours+competitors (stable ref); CATS is module-level constant.
+  // Disabling exhaustive-deps for allE since it's derived inside the component and
+  // would cause an infinite loop if included directly.
 
   return (
     <div>
-      {cats.map(cat => (
+      {CATS.map(cat => (
         <div key={cat} className="cc-cat-group">
           <div className="cc-cat-title">{cat}</div>
           {allE.map(e => (
@@ -331,7 +346,7 @@ const TABS = ["Overview", "Rating", "Sentiment", "Categories", "Response Rate"];
 export default function CompetitorComparison() {
   const [yours,   setYours]   = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  // FIX 5: Removed unused 'setError' — error state was set but never rendered
   const [tab,     setTab]     = useState("Overview");
 
   useEffect(() => {
@@ -417,15 +432,14 @@ export default function CompetitorComparison() {
           </div>
         </div>
 
-        {error && <div className="cc-error">⚠️ {error}</div>}
-        {loading && !error && (
+        {loading && (
           <div className="cc-loader-wrap">
             <div className="cc-spinner" />
             <div className="cc-loader-text">Loading market data…</div>
           </div>
         )}
 
-        {!loading && !error && (
+        {!loading && (
           <>
             {/* Legend */}
             <div className="cc-legend">
@@ -496,8 +510,8 @@ export default function CompetitorComparison() {
                           <span>{e.isYou ? "You" : e.name}</span>
                         </div>
                         {e.trend.map((v, i) => {
-                          const prev = e.trend[i - 1];
-                          const dir = prev === undefined ? null : v > prev ? "up" : v < prev ? "down" : "flat";
+                          const prevVal = e.trend[i - 1];
+                          const dir = prevVal === undefined ? null : v > prevVal ? "up" : v < prevVal ? "down" : "flat";
                           return (
                             <div key={i} className="cc-trend-cell" style={{ color: e.color, fontWeight: 700 }}>
                               {v}

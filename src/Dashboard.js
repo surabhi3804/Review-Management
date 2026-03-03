@@ -566,7 +566,7 @@ function MiniSparkline({ data, color, w = 72, h = 24 }) {
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
   const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(" ");
-  const last = data[data.length - 1], prev = data[data.length - 2];
+  const last = data[data.length - 1];
   return (
     <svg width={w} height={h} style={{ overflow: "visible", display: "block" }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8"
