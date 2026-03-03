@@ -55,6 +55,7 @@ function buildInsights(negativeReviews) {
 }
 
 // ── CountUp ───────────────────────────────────────────────────
+// FIX 1: Added 'duration' to the useEffect dependency array
 function CountUp({ target, duration = 1200, suffix = "", decimals = 0 }) {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -67,7 +68,7 @@ function CountUp({ target, duration = 1200, suffix = "", decimals = 0 }) {
       if (p < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, [target, decimals]);
+  }, [target, duration, decimals]); // <-- added 'duration' here
   return <>{val}{suffix}</>;
 }
 
@@ -149,7 +150,7 @@ function StatCard({ label, value, suffix = "", accent, icon, delay = 0, decimals
   );
 }
 
-// ── ReviewSourceCard (NEW) ────────────────────────────────────
+// ── ReviewSourceCard ──────────────────────────────────────────
 function ReviewSourceCard({ name, data, delay = 0 }) {
   const meta = SOURCE_META[name] || { icon: "?", color: "#94A3B8", bg: "#94A3B822", border: "#94A3B844" };
   const negPct = data.total ? Math.round((data.negative / data.total) * 100) : 0;
@@ -208,7 +209,7 @@ function ReviewSourceCard({ name, data, delay = 0 }) {
   );
 }
 
-// ── SentimentDonut (NEW) ─────────────────────────────────────
+// ── SentimentDonut ────────────────────────────────────────────
 function SentimentDonut({ positive, neutral, negative, total }) {
   const posPct = total ? Math.round((positive / total) * 100) : 0;
   const neuPct = total ? Math.round((neutral  / total) * 100) : 0;
@@ -295,12 +296,13 @@ function KeywordPill({ word, count, rank }) {
 const API_BASE = "http://localhost:5000";
 
 export default function RootCauseAnalyzer() {
-  const [branches,  setBranches]  = useState([]);
-  const [branch,    setBranch]    = useState("all");
-  const [insights,  setInsights]  = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [ error, setError]     = useState(null);
+  const [branches,    setBranches]    = useState([]);
+  const [branch,      setBranch]      = useState("all");
+  const [insights,    setInsights]    = useState(null);
+  const [analytics,   setAnalytics]   = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  // FIX 2: Removed unused 'error' state variable; only keeping setError as a no-op if needed,
+  // or simply remove entirely since error is never rendered.
   const [sourcesData, setSourcesData] = useState(MOCK_SOURCES);
 
   useEffect(() => {
@@ -317,7 +319,7 @@ export default function RootCauseAnalyzer() {
   }, []);
 
   useEffect(() => {
-    setLoading(true); setError(null);
+    setLoading(true);
     const bp = branch !== "all" ? `&branch=${branch}` : "";
     const ap = branch !== "all" ? `?branch=${branch}` : "";
     Promise.all([
@@ -368,7 +370,7 @@ export default function RootCauseAnalyzer() {
       });
       setLoading(false);
     });
-  }, [branch, setError]);
+  }, [branch]);
 
   const a = analytics || {};
   const s = a.sentiment_breakdown || {};
@@ -506,7 +508,7 @@ export default function RootCauseAnalyzer() {
               {/* Right column */}
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
-                {/* ── REVIEW SOURCES (redesigned) ── */}
+                {/* ── REVIEW SOURCES ── */}
                 <Card accent="#A78BFA" delay={400}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
                     <div>
