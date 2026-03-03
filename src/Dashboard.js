@@ -5,6 +5,8 @@ import RootCauseAnalyzer from "./Rootcauseanalyzer";
 import SmartAlerts from "./SmartAlerts";
 import CompetitorComparison from "./CompetitorComparison";
 
+const API_BASE = "https://review-management-tb17.onrender.com";
+
 // ── Static Sample Data ────────────────────────────────────────
 const REVIEWS = [
   { id:  1, source: "Google",   branch: "Andheri", author: "Priya Sharma",   rating: 5, category: "Food",        sentiment: "positive", text: "Absolutely incredible food quality! The biryani was heavenly and perfectly spiced.",     time: "2 mins ago",   staff: "Ravi Kumar",  avatar: "PS" },
@@ -870,7 +872,7 @@ export default function ReviewDashboard() {
 
   const fetchReviews = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/reviews");
+      const res = await fetch(`${API_BASE}/api/reviews`);
       const data = await res.json();
       if (data.success && data.reviews.length > 0) setApiReviews(data.reviews.map(mapApiReview));
     } catch (e) { console.warn("Could not fetch reviews from backend:", e); }
@@ -879,7 +881,7 @@ export default function ReviewDashboard() {
 
   useEffect(() => {
     const init = async () => {
-      try { await fetch("http://localhost:5000/api/sync-sheet", { method: "POST" }); } catch {}
+      try { await fetch(`${API_BASE}/api/sync-sheet`, { method: "POST" }); } catch {}
       await fetchReviews();
     };
     init();
@@ -888,7 +890,7 @@ export default function ReviewDashboard() {
   const syncSheet = async () => {
     setSyncing(true); setSyncMsg("");
     try {
-      const res = await fetch("http://localhost:5000/api/sync-sheet", { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/sync-sheet`, { method: "POST" });
       const data = await res.json();
       setSyncMsg(data.success ? `✅ ${data.message}` : `⚠️ ${data.error}`);
       if (data.success) await fetchReviews();

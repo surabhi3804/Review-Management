@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./SmartAlerts.css";
 
-const API_BASE        = "http://localhost:5000";
+const API_BASE        = "https://review-management-tb17.onrender.com";
 const SPIKE_THRESHOLD = 2;
 const STAFF_THRESHOLD = 2;
 

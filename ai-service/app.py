@@ -16,24 +16,53 @@ import ssl
 import urllib.request as urlrequest
 from datetime import datetime
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 
 app = Flask(__name__)
 
 # ─────────────────────────────────────────────
-# ⚙️  CORS — allows all Vercel preview URLs + localhost
+# ✅ BULLETPROOF CORS — handles ALL origins including Vercel
+# flask-cors wildcard doesn't work reliably, so we handle it manually
 # ─────────────────────────────────────────────
-CORS(app, resources={r"/*": {"origins": [
-    "https://review-nrgn2k706-surabhi3804s-projects.vercel.app",
-    "https://*.vercel.app",          # covers all preview deployments
+ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-]}}, supports_credentials=True)
+]
+
+def is_allowed_origin(origin):
+    if not origin:
+        return False
+    # Allow any *.vercel.app subdomain
+    if origin.endswith(".vercel.app"):
+        return True
+    # Allow exact matches (localhost etc.)
+    return origin in ALLOWED_ORIGINS
+
+@app.after_request
+def apply_cors(response):
+    origin = request.headers.get("Origin", "")
+    if is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"]      = origin
+        response.headers["Access-Control-Allow-Headers"]     = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        origin = request.headers.get("Origin", "")
+        resp = app.make_default_options_response()
+        if is_allowed_origin(origin):
+            resp.headers["Access-Control-Allow-Origin"]      = origin
+            resp.headers["Access-Control-Allow-Headers"]     = "Content-Type, Authorization"
+            resp.headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS"
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+        return resp
 
 # ─────────────────────────────────────────────
 # ⚙️  GOOGLE SHEET CSV URL
-#     On Render → set this as an Environment Variable
-#     Locally   → paste your URL here as fallback
+#     On Render → set as Environment Variable: GOOGLE_SHEET_CSV_URL
+#     Locally   → paste your URL as fallback below
 # ─────────────────────────────────────────────
 GOOGLE_SHEET_CSV_URL = os.environ.get(
     "GOOGLE_SHEET_CSV_URL",
@@ -67,10 +96,10 @@ SAMPLE_REVIEWS = [
 ]
 
 for r in SAMPLE_REVIEWS:
-    r["sentiment"] = None
-    r["categories"] = []
+    r["sentiment"]   = None
+    r["categories"]  = []
     r["ai_response"] = None
-    r["status"] = "pending"
+    r["status"]      = "pending"
     reviews_db.append(r)
 review_id_counter[0] = len(SAMPLE_REVIEWS) + 1
 
@@ -156,7 +185,7 @@ def load_from_google_sheet():
 
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.verify_mode    = ssl.CERT_NONE
 
     raw = None
     current_url = url
@@ -199,22 +228,22 @@ def load_from_google_sheet():
     added = 0
 
     for row in non_empty:
-        reviewer = (row.get("name") or row.get("reviewer") or row.get("customer name")
-                    or row.get("customer") or row.get("author") or row.get("user") or "")
-        branch   = (row.get("branch") or row.get("location") or row.get("outlet")
-                    or row.get("store") or row.get("restaurant") or "")
-        text     = (row.get("feedback comment") or row.get("text") or row.get("review")
-                    or row.get("comment") or row.get("feedback") or row.get("message")
-                    or row.get("comments") or row.get("description") or "")
+        reviewer   = (row.get("name") or row.get("reviewer") or row.get("customer name")
+                      or row.get("customer") or row.get("author") or row.get("user") or "")
+        branch     = (row.get("branch") or row.get("location") or row.get("outlet")
+                      or row.get("store") or row.get("restaurant") or "")
+        text       = (row.get("feedback comment") or row.get("text") or row.get("review")
+                      or row.get("comment") or row.get("feedback") or row.get("message")
+                      or row.get("comments") or row.get("description") or "")
         rating_raw = (row.get("rating") or row.get("stars") or row.get("score")
                       or row.get("star rating") or "")
         rating_int = parse_rating(rating_raw)
-        source    = row.get("source") or row.get("platform") or "Google Form"
-        timestamp = (row.get("timestamp") or row.get("date") or row.get("time")
-                     or row.get("submitted at") or datetime.now().strftime("%Y-%m-%d %H:%M"))
+        source     = row.get("source") or row.get("platform") or "Google Form"
+        timestamp  = (row.get("timestamp") or row.get("date") or row.get("time")
+                      or row.get("submitted at") or datetime.now().strftime("%Y-%m-%d %H:%M"))
 
         if not reviewer or not branch or not text:
-            print(f"  Skipping — missing field: name={repr(reviewer)}, branch={repr(branch)}, text={repr(text[:30])}")
+            print(f"  Skipping — missing: name={repr(reviewer)}, branch={repr(branch)}, text={repr(text[:30])}")
             continue
 
         if (reviewer.lower(), timestamp) in existing:
@@ -239,7 +268,6 @@ def load_from_google_sheet():
 
 # ── API Routes ────────────────────────────────────────────────────────────
 
-# ✅ NEW: Health check endpoint — used by UptimeRobot to keep Render awake
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "total_reviews": len(reviews_db)}), 200
@@ -256,16 +284,13 @@ def index():
 def sync_sheet():
     if request.method == "OPTIONS":
         return jsonify({}), 200
-
     configured = bool(GOOGLE_SHEET_CSV_URL and GOOGLE_SHEET_CSV_URL.strip())
-
     if request.method == "GET":
         return jsonify({
             "configured": configured,
             "total_reviews": len(reviews_db),
             "message": "Sheet connected ✅" if configured else "⚠️ URL not configured"
         })
-
     added, error = load_from_google_sheet()
     if error:
         return jsonify({"success": False, "error": error, "total_reviews": len(reviews_db)}), 200
@@ -352,8 +377,7 @@ def get_analytics():
 def get_branches():
     return jsonify({"success": True, "branches": sorted({r["branch"] for r in reviews_db})})
 
-# ── Startup ───────────────────────────────────────────────────────────────
-# ✅ Auto-sync sheet when Render spins up the server
+# ── Startup sync (runs on gunicorn load AND direct run) ───────────────────
 def startup_sync():
     print("\n" + "=" * 55)
     print("  Review Management System — RUNNING")
@@ -361,15 +385,13 @@ def startup_sync():
     print("  Syncing Google Sheet on startup …")
     added, error = load_from_google_sheet()
     if error: print(f"  ⚠  {error}")
-    else:     print(f"  ✅ Sheet sync done — {added} new review(s) loaded")
+    else:     print(f"  ✅ {added} new review(s) loaded from sheet")
     print(f"  Total reviews in memory: {len(reviews_db)}")
     print("=" * 55 + "\n")
 
-# Run startup sync immediately when the module loads (works for both gunicorn & direct run)
 startup_sync()
 
 if __name__ == "__main__":
-    # ✅ Render injects a PORT env variable — must bind to it, not hardcode 5000
     port = int(os.environ.get("PORT", 5000))
-    print(f"  API running at:  http://localhost:{port}")
+    print(f"  API running at: http://localhost:{port}")
     app.run(debug=False, host="0.0.0.0", port=port)

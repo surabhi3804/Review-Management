@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./CompetitorComparison.css";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://review-management-tb17.onrender.com";
 
 // ── Mock competitor data ──────────────────────────────────────
 const COMPETITORS = [
@@ -60,7 +60,6 @@ function Sparkline({ data, color, width = 70, height = 26 }) {
     return `${x},${y}`;
   }).join(" ");
   const last = data[data.length - 1], prev = data[data.length - 2];
-  // FIX 1: 'trending' was assigned but never used — replaced with direct usage
   const trendingUp = last >= prev;
   return (
     <svg width={width} height={height} style={{ overflow: "visible" }}>
@@ -200,13 +199,12 @@ function CompetitorCard({ entity, rank, delay = 0 }) {
 }
 
 // ── RatingBar ─────────────────────────────────────────────────
-// FIX 2: Added entity.avgRating to dependency array
 function RatingBar({ entity, delay = 0 }) {
   const [w, setW] = useState(0);
   useEffect(() => {
     const t = setTimeout(() => setW((entity.avgRating / 5) * 100), delay);
     return () => clearTimeout(t);
-  }, [delay, entity.avgRating]); // <-- added entity.avgRating
+  }, [delay, entity.avgRating]);
   return (
     <div className="cc-rbar-row">
       <div className="cc-rbar-meta">
@@ -227,7 +225,6 @@ function RatingBar({ entity, delay = 0 }) {
 }
 
 // ── SentimentBar ──────────────────────────────────────────────
-// FIX 3: Added pos, neu, neg to dependency array
 function SentimentBar({ entity, delay = 0 }) {
   const [w, setW] = useState({ pos: 0, neu: 0, neg: 0 });
   const total = entity.sentiment.positive + entity.sentiment.neutral + entity.sentiment.negative;
@@ -237,7 +234,7 @@ function SentimentBar({ entity, delay = 0 }) {
   useEffect(() => {
     const x = setTimeout(() => setW({ pos, neu, neg }), delay);
     return () => clearTimeout(x);
-  }, [delay, pos, neu, neg]); // <-- added pos, neu, neg
+  }, [delay, pos, neu, neg]);
 
   return (
     <div className="cc-sbar-row">
@@ -265,7 +262,6 @@ function SentimentBar({ entity, delay = 0 }) {
 // ── CategoryBars ──────────────────────────────────────────────
 const CATS = ["Food", "Service", "Staff", "Ambience", "Cleanliness"];
 
-// FIX 4: Moved cats outside component to avoid stale dependency; added allE & cats to deps
 function CategoryBars({ yours, competitors }) {
   const allE = yours ? [yours, ...competitors] : competitors;
   const [w, setW] = useState({});
@@ -281,9 +277,6 @@ function CategoryBars({ yours, competitors }) {
     }, 300);
     return () => clearTimeout(t);
   }, [yours]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Note: allE is derived from yours+competitors (stable ref); CATS is module-level constant.
-  // Disabling exhaustive-deps for allE since it's derived inside the component and
-  // would cause an infinite loop if included directly.
 
   return (
     <div>
@@ -346,7 +339,6 @@ const TABS = ["Overview", "Rating", "Sentiment", "Categories", "Response Rate"];
 export default function CompetitorComparison() {
   const [yours,   setYours]   = useState(null);
   const [loading, setLoading] = useState(true);
-  // FIX 5: Removed unused 'setError' — error state was set but never rendered
   const [tab,     setTab]     = useState("Overview");
 
   useEffect(() => {
