@@ -300,7 +300,7 @@ export default function RootCauseAnalyzer() {
   const [insights,  setInsights]  = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
+  const [ setError]     = useState(null);
   const [sourcesData, setSourcesData] = useState(MOCK_SOURCES);
 
   useEffect(() => {
