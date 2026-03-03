@@ -1,0 +1,23 @@
+{
+  "name": "root-cause-analyzer-backend",
+  "homepage": "https://anush-2705.github.io/Runtime-Rebels-PS-4",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "predeploy": "npm run build",
+"deploy": "gh-pages -d build"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.0.0",
+    "react-scripts": "5.0.1",
+    "express": "^4.22.1",
+    "firebase-admin": "^13.7.0",
+    "mongoose": "^7.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
