@@ -293,7 +293,8 @@ function KeywordPill({ word, count, rank }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-const API_BASE = "http://localhost:5000";
+//const API_BASE = "http://localhost:5000";
+const API_BASE ="https://review-management-tb17.onrender.com";
 
 export default function RootCauseAnalyzer() {
   const [branches,    setBranches]    = useState([]);

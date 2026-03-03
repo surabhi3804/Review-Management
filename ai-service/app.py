@@ -1,25 +1,44 @@
 """
 Review Management System - Backend API
 =======================================
-Run: python3 app.py
+Local:  python3 app.py
+Render: gunicorn app:app
 
-YOUR GOOGLE SHEET COLUMNS (auto-detected):
-  Timestamp | Name | Branch | Rating | Feedback Comment | Would you visit again?
+Environment Variables needed on Render:
+  GOOGLE_SHEET_CSV_URL  — your Google Sheet published CSV URL
 """
 
-from flask import Flask, request, jsonify
-from datetime import datetime
-from flask_cors import CORS
-import random, csv, io, ssl
+import os
+import random
+import csv
+import io
+import ssl
 import urllib.request as urlrequest
+from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 
 # ─────────────────────────────────────────────
-# ⚙️  YOUR GOOGLE SHEET CSV URL
+# ⚙️  CORS — allows all Vercel preview URLs + localhost
 # ─────────────────────────────────────────────
-GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT25xw-m-5q5HuvfunXkHKEizgYtsvSG_4k4cqzodxVVcdvfQV-IiVoIKiOBJSBXvHwJ0u4JHiGXiby/pub?output=csv"
+CORS(app, resources={r"/*": {"origins": [
+    "https://review-nrgn2k706-surabhi3804s-projects.vercel.app",
+    "https://*.vercel.app",          # covers all preview deployments
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]}}, supports_credentials=True)
+
+# ─────────────────────────────────────────────
+# ⚙️  GOOGLE SHEET CSV URL
+#     On Render → set this as an Environment Variable
+#     Locally   → paste your URL here as fallback
+# ─────────────────────────────────────────────
+GOOGLE_SHEET_CSV_URL = os.environ.get(
+    "GOOGLE_SHEET_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vT25xw-m-5q5HuvfunXkHKEizgYtsvSG_4k4cqzodxVVcdvfQV-IiVoIKiOBJSBXvHwJ0u4JHiGXiby/pub?output=csv"
+)
 
 reviews_db = []
 review_id_counter = [1]
@@ -48,11 +67,14 @@ SAMPLE_REVIEWS = [
 ]
 
 for r in SAMPLE_REVIEWS:
-    r["sentiment"] = None; r["categories"] = []; r["ai_response"] = None; r["status"] = "pending"
+    r["sentiment"] = None
+    r["categories"] = []
+    r["ai_response"] = None
+    r["status"] = "pending"
     reviews_db.append(r)
 review_id_counter[0] = len(SAMPLE_REVIEWS) + 1
 
-# ── Rating text → number (matches your Google Form star labels) ───────────
+# ── Rating text → number ──────────────────────────────────────────────────
 RATING_TEXT_MAP = {
     "excellent": 5, "outstanding": 5, "perfect": 5, "amazing": 5, "wonderful": 5, "fantastic": 5,
     "very good": 4, "good": 4, "great": 4,
@@ -71,8 +93,10 @@ def parse_rating(raw):
     except: return 3
 
 # ── Sentiment / Categories / AI response ─────────────────────────────────
-POSITIVE_WORDS = ["amazing","great","excellent","good","best","fantastic","wonderful","awesome","love","helpful","friendly","clean","fresh","happy","enjoyed","perfect","outstanding","polite","fast","delicious","nice"]
-NEGATIVE_WORDS = ["terrible","bad","worst","rude","disappointed","horrible","awful","disgusting","cold","slow","ignored","dirty","waited","poor","never","pathetic","stale","overpriced"]
+POSITIVE_WORDS = ["amazing","great","excellent","good","best","fantastic","wonderful","awesome","love","helpful",
+                  "friendly","clean","fresh","happy","enjoyed","perfect","outstanding","polite","fast","delicious","nice"]
+NEGATIVE_WORDS = ["terrible","bad","worst","rude","disappointed","horrible","awful","disgusting","cold","slow",
+                  "ignored","dirty","waited","poor","never","pathetic","stale","overpriced"]
 
 CATEGORY_KEYWORDS = {
     "Food":        ["food","biryani","dish","taste","menu","meal","portion","fresh","stale","cold","delicious","bland","waffle","pancake","sushi","ramen"],
@@ -123,7 +147,6 @@ for r in reviews_db:
 def load_from_google_sheet():
     global review_id_counter
 
-    # ✅ FIX: Only skip if URL is actually empty, not based on a placeholder comparison
     if not GOOGLE_SHEET_CSV_URL or not GOOGLE_SHEET_CSV_URL.strip():
         return 0, "Google Sheet URL not configured"
 
@@ -147,7 +170,9 @@ def load_from_google_sheet():
                     except UnicodeDecodeError: continue
                 break
         except urlrequest.HTTPError as e:
-            if e.code in (301,302,303,307,308): current_url = e.headers.get("Location", current_url); continue
+            if e.code in (301, 302, 303, 307, 308):
+                current_url = e.headers.get("Location", current_url)
+                continue
             return 0, f"HTTP {e.code}: {e.reason}"
         except Exception as e:
             return 0, f"Could not fetch sheet: {str(e)}"
@@ -174,25 +199,17 @@ def load_from_google_sheet():
     added = 0
 
     for row in non_empty:
-        # ── Map YOUR sheet columns ──────────────────────────────────────
         reviewer = (row.get("name") or row.get("reviewer") or row.get("customer name")
                     or row.get("customer") or row.get("author") or row.get("user") or "")
-
         branch   = (row.get("branch") or row.get("location") or row.get("outlet")
                     or row.get("store") or row.get("restaurant") or "")
-
-        # "Feedback Comment" — YOUR column name
         text     = (row.get("feedback comment") or row.get("text") or row.get("review")
                     or row.get("comment") or row.get("feedback") or row.get("message")
                     or row.get("comments") or row.get("description") or "")
-
-        # "Rating" — YOUR column has text like "Excellent", "Very Bad"
         rating_raw = (row.get("rating") or row.get("stars") or row.get("score")
                       or row.get("star rating") or "")
         rating_int = parse_rating(rating_raw)
-
         source    = row.get("source") or row.get("platform") or "Google Form"
-
         timestamp = (row.get("timestamp") or row.get("date") or row.get("time")
                      or row.get("submitted at") or datetime.now().strftime("%Y-%m-%d %H:%M"))
 
@@ -221,12 +238,17 @@ def load_from_google_sheet():
     return added, None
 
 # ── API Routes ────────────────────────────────────────────────────────────
+
+# ✅ NEW: Health check endpoint — used by UptimeRobot to keep Render awake
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "total_reviews": len(reviews_db)}), 200
+
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({
         "status": "running",
         "total_reviews": len(reviews_db),
-        # ✅ FIX: sheet_connected is True as long as the URL is not empty
         "sheet_connected": bool(GOOGLE_SHEET_CSV_URL and GOOGLE_SHEET_CSV_URL.strip())
     })
 
@@ -235,7 +257,6 @@ def sync_sheet():
     if request.method == "OPTIONS":
         return jsonify({}), 200
 
-    # ✅ FIX: configured is True as long as the URL is not empty
     configured = bool(GOOGLE_SHEET_CSV_URL and GOOGLE_SHEET_CSV_URL.strip())
 
     if request.method == "GET":
@@ -257,26 +278,40 @@ def sync_sheet():
 
 @app.route("/api/reviews", methods=["GET"])
 def get_reviews():
-    branch = request.args.get("branch"); sentiment = request.args.get("sentiment"); source = request.args.get("source")
-    result = reviews_db[:]
-    if branch:    result = [r for r in result if r["branch"] == branch]
+    branch    = request.args.get("branch")
+    sentiment = request.args.get("sentiment")
+    source    = request.args.get("source")
+    result    = reviews_db[:]
+    if branch:    result = [r for r in result if r["branch"]    == branch]
     if sentiment: result = [r for r in result if r["sentiment"] == sentiment]
-    if source:    result = [r for r in result if r["source"] == source]
-    return jsonify({"success": True, "count": len(result), "reviews": sorted(result, key=lambda x: x["timestamp"], reverse=True)})
+    if source:    result = [r for r in result if r["source"]    == source]
+    return jsonify({
+        "success": True,
+        "count": len(result),
+        "reviews": sorted(result, key=lambda x: x["timestamp"], reverse=True)
+    })
 
 @app.route("/api/reviews", methods=["POST"])
 def add_review():
     data = request.get_json()
-    if not data: return jsonify({"success": False, "error": "No JSON"}), 400
-    branch = data.get("branch"); reviewer = data.get("reviewer") or data.get("name")
-    rating = data.get("rating"); text = data.get("text") or data.get("comment")
+    if not data:
+        return jsonify({"success": False, "error": "No JSON"}), 400
+    branch   = data.get("branch")
+    reviewer = data.get("reviewer") or data.get("name")
+    rating   = data.get("rating")
+    text     = data.get("text") or data.get("comment")
     if not all([branch, reviewer, rating, text]):
         return jsonify({"success": False, "error": "Missing: branch, reviewer, rating, text"}), 400
-    new_review = {"id": review_id_counter[0], "branch": branch, "source": data.get("source","QR Form"),
-                  "reviewer": reviewer, "rating": parse_rating(str(rating)), "text": text,
-                  "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                  "sentiment": None, "categories": [], "ai_response": None, "status": "pending"}
-    review_id_counter[0] += 1; process_review(new_review); new_review["status"] = "processed"
+    new_review = {
+        "id": review_id_counter[0], "branch": branch,
+        "source": data.get("source", "QR Form"),
+        "reviewer": reviewer, "rating": parse_rating(str(rating)), "text": text,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "sentiment": None, "categories": [], "ai_response": None, "status": "pending"
+    }
+    review_id_counter[0] += 1
+    process_review(new_review)
+    new_review["status"] = "processed"
     reviews_db.append(new_review)
     return jsonify({"success": True, "review": new_review}), 201
 
@@ -285,26 +320,32 @@ def respond_to_review(review_id):
     data = request.get_json()
     for r in reviews_db:
         if r["id"] == review_id:
-            r["status"] = "responded"; r["manager_response"] = data.get("response",""); r["responded_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            r["status"]           = "responded"
+            r["manager_response"] = data.get("response", "")
+            r["responded_at"]     = datetime.now().strftime("%Y-%m-%d %H:%M")
             return jsonify({"success": True, "review": r})
     return jsonify({"success": False, "error": "Not found"}), 404
 
 @app.route("/api/analytics", methods=["GET"])
 def get_analytics():
     branch = request.args.get("branch")
-    data = reviews_db if not branch else [r for r in reviews_db if r["branch"] == branch]
-    if not data: return jsonify({"success": True, "analytics": {}})
+    data   = reviews_db if not branch else [r for r in reviews_db if r["branch"] == branch]
+    if not data:
+        return jsonify({"success": True, "analytics": {}})
     sc = {"positive": 0, "neutral": 0, "negative": 0}
     for r in data:
         if r["sentiment"] in sc: sc[r["sentiment"]] += 1
     br = {}
-    for r in reviews_db: br.setdefault(r["branch"], []).append(r["rating"])
-    avg = round(sum(r["rating"] for r in data) / len(data), 1)
+    for r in reviews_db:
+        br.setdefault(r["branch"], []).append(r["rating"])
+    avg       = round(sum(r["rating"] for r in data) / len(data), 1)
     responded = sum(1 for r in data if r["status"] == "responded")
     return jsonify({"success": True, "analytics": {
-        "total_reviews": len(data), "average_rating": avg,
-        "response_rate_percent": round(responded/len(data)*100,1),
-        "sentiment_breakdown": sc, "branch_avg_ratings": {b: round(sum(v)/len(v),1) for b,v in br.items()},
+        "total_reviews":         len(data),
+        "average_rating":        avg,
+        "response_rate_percent": round(responded / len(data) * 100, 1),
+        "sentiment_breakdown":   sc,
+        "branch_avg_ratings":    {b: round(sum(v) / len(v), 1) for b, v in br.items()},
     }})
 
 @app.route("/api/branches", methods=["GET"])
@@ -312,15 +353,23 @@ def get_branches():
     return jsonify({"success": True, "branches": sorted({r["branch"] for r in reviews_db})})
 
 # ── Startup ───────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    print("\n" + "="*55)
+# ✅ Auto-sync sheet when Render spins up the server
+def startup_sync():
+    print("\n" + "=" * 55)
     print("  Review Management System — RUNNING")
-    print("="*55)
+    print("=" * 55)
     print("  Syncing Google Sheet on startup …")
     added, error = load_from_google_sheet()
     if error: print(f"  ⚠  {error}")
     else:     print(f"  ✅ Sheet sync done — {added} new review(s) loaded")
     print(f"  Total reviews in memory: {len(reviews_db)}")
-    print("  API running at:  http://localhost:5000")
-    print("="*55 + "\n")
-    app.run(debug=True, port=5000)
+    print("=" * 55 + "\n")
+
+# Run startup sync immediately when the module loads (works for both gunicorn & direct run)
+startup_sync()
+
+if __name__ == "__main__":
+    # ✅ Render injects a PORT env variable — must bind to it, not hardcode 5000
+    port = int(os.environ.get("PORT", 5000))
+    print(f"  API running at:  http://localhost:{port}")
+    app.run(debug=False, host="0.0.0.0", port=port)
