@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import "./SmartAlerts.css";
 
 const API_BASE        = "http://localhost:5000";
@@ -329,7 +329,7 @@ export default function SmartAlerts() {
   const [alerts,    setAlerts]    = useState([]);
   const [dismissed, setDismissed] = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
+  const [error]     = useState(null);
   const [refreshed, setRefreshed] = useState(null);
   const [spinning,  setSpinning]  = useState(false);
   const [reviews,   setReviews]   = useState([]);
