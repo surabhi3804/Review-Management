@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./SmartAlerts.css";
 
 const API_BASE        = "http://localhost:5000";
